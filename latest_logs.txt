@@ -1,0 +1,1 @@
+ERROR: InvalidParameterValueError - Environment named fitness-env is in an invalid state for this operation. Must be Ready.
