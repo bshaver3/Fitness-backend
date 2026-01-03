@@ -44,3 +44,7 @@ def get_insights():
     items = response.get('Items', [])
     total_calories = sum(item['calories'] for item in items)
     return {"total_calories": total_calories, "message": f"You've burned {total_calories} calories!"}
+
+@app.get("/health")
+def health():
+    return {"ok": True}
