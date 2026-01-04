@@ -3,6 +3,7 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 from typing import List
 from fastapi.middleware.cors import CORSMiddleware  # Keep CORS for frontend
+from uuid import uuid4
 
 app = FastAPI()
 
@@ -26,6 +27,7 @@ dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
 table = dynamodb.Table('Workouts')
 
 class Workout(BaseModel):
+    id: str | None = None
     type: str
     duration: int
     calories: int
@@ -36,6 +38,8 @@ def read_root():
 
 @app.post("/workouts", response_model=Workout)
 def log_workout(workout: Workout):
+    if not workout.id:
+        workout.id = str(uuid4())
     table.put_item(Item=workout.dict())
     return workout
 
