@@ -7,12 +7,18 @@ from fastapi.middleware.cors import CORSMiddleware  # Keep CORS for frontend
 app = FastAPI()
 
 # Add CORS
+aapp = FastAPI()
+
+origins = [
+    "https://dev.d3czb7uix4xpb0.amplifyapp.com",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["https://dev.d3czb7uix4xpb0.amplifyapp.com/"],  # Replace with your Amplify URL
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
 )
 
 # DynamoDB setup
