@@ -8,8 +8,6 @@ from uuid import uuid4
 app = FastAPI()
 
 # Add CORS
-aapp = FastAPI()
-
 origins = [
     "https://dev.d3czb7uix4xpb0.amplifyapp.com",
 ]
