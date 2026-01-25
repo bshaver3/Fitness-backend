@@ -56,3 +56,8 @@ def get_insights():
 @app.get("/health")
 def health():
     return {"ok": True}
+
+@app.delete("/workouts/{workout_id}")
+def delete_workout(workout_id: str):
+    table.delete_item(Key={'id': workout_id})
+    return {"message": f"Workout {workout_id} deleted."}
