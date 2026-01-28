@@ -8,15 +8,10 @@ from datetime import datetime, timezone
 
 app = FastAPI()
 
-# Add CORS
-origins = [
-    "https://main.d20be68lg9xm5h.amplifyapp.com",
-    "http://localhost:3000"
-]
-
+# Add CORS - Allow all origins for now
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,
+    allow_origins=["*"],  # Allow all origins
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -56,6 +51,7 @@ class PlannedWorkout(BaseModel):
     user_id: str = "default"
     workout_type: str
     planned_date: str  # YYYY-MM-DD format
+    planned_time: str | None = None  # HH:MM format (24-hour)
     planned_duration: int
     notes: str | None = None
     created_at: str | None = None
