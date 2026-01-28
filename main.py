@@ -8,10 +8,13 @@ from datetime import datetime, timezone
 
 app = FastAPI()
 
-# Add CORS - Allow all origins for now
+# Add CORS - Restrict to authorized origins only
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins
+    allow_origins=[
+        "http://localhost:3000",  # Local development
+        "https://main.d20be68lg9xm5h.amplifyapp.com"  # Production frontend
+    ],
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
