@@ -2,3 +2,6 @@ fastapi
 uvicorn[standard]
 gunicorn
 boto3
+python-jose[cryptography]
+httpx
+cachetools
