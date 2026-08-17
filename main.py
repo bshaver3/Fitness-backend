@@ -1,14 +1,62 @@
-import boto3
+import json
+import os
+import time
+from collections import defaultdict
+from pathlib import Path
 from fastapi import FastAPI, Depends, HTTPException
-from pydantic import BaseModel
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, Field, field_validator
 from typing import List, Optional
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.requests import Request
 from uuid import uuid4
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 from auth import get_current_user_id
+import re
 
 app = FastAPI()
+
+TRUE_VALUES = {"1", "true", "yes", "on"}
+LOCAL_MOCK = os.environ.get("LOCAL_MOCK", "").strip().lower() in TRUE_VALUES
+MOCK_DATA_FILE = Path(os.environ.get("MOCK_DATA_FILE", "mock-data.json"))
+
+# In-memory rate limiter: 100 requests per minute per IP
+class RateLimitMiddleware(BaseHTTPMiddleware):
+    def __init__(self, app, max_requests: int = 100, window_seconds: int = 60):
+        super().__init__(app)
+        self.max_requests = max_requests
+        self.window_seconds = window_seconds
+        self.requests: dict = defaultdict(list)
+
+    async def dispatch(self, request: Request, call_next):
+        if request.url.path in ("/health", "/"):
+            return await call_next(request)
+
+        forwarded_for = request.headers.get("X-Forwarded-For", "")
+        client_ip = forwarded_for.split(",")[0].strip() if forwarded_for else (
+            request.client.host if request.client else "unknown"
+        )
+
+        content_length = request.headers.get("Content-Length")
+        if content_length and int(content_length) > 1_048_576:  # 1 MB limit
+            return JSONResponse(status_code=413, content={"detail": "Request body too large"})
+
+        now = time.time()
+        self.requests[client_ip] = [t for t in self.requests[client_ip] if now - t < self.window_seconds]
+
+        if len(self.requests[client_ip]) >= self.max_requests:
+            return JSONResponse(
+                status_code=429,
+                content={"detail": "Too many requests. Please try again later."},
+                headers={"Retry-After": str(self.window_seconds)},
+            )
+
+        self.requests[client_ip].append(now)
+        return await call_next(request)
+
+app.add_middleware(RateLimitMiddleware)
 
 # Add CORS - Restrict to authorized origins only
 app.add_middleware(
@@ -18,51 +66,205 @@ app.add_middleware(
         "https://main.d20be68lg9xm5h.amplifyapp.com"  # Production frontend
     ],
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
+    allow_headers=["Authorization", "Content-Type"],
 )
 
-# DynamoDB setup
-dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
-table = dynamodb.Table('Workouts')
-profile_table = dynamodb.Table('UserProfiles')
-planned_workouts_table = dynamodb.Table('PlannedWorkouts')
+class JsonTable:
+    def __init__(self, file_path: Path, collection: str, key_name: str):
+        self.file_path = file_path
+        self.collection = collection
+        self.key_name = key_name
+
+    def _default_data(self):
+        return {
+            "workouts": [],
+            "profiles": [],
+            "planned_workouts": [],
+        }
+
+    def _load(self):
+        if not self.file_path.exists():
+            return self._default_data()
+
+        with self.file_path.open("r", encoding="utf-8") as file:
+            data = json.load(file)
+
+        defaults = self._default_data()
+        defaults.update(data)
+        return defaults
+
+    def _save(self, data):
+        self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        with self.file_path.open("w", encoding="utf-8") as file:
+            json.dump(data, file, indent=2, sort_keys=True)
+
+    def _matches_key(self, item, key):
+        return all(item.get(field) == value for field, value in key.items())
+
+    def put_item(self, Item):
+        data = self._load()
+        items = data[self.collection]
+        key = {self.key_name: Item[self.key_name]}
+        existing_index = next((index for index, item in enumerate(items) if self._matches_key(item, key)), None)
+
+        if existing_index is None:
+            items.append(Item)
+        else:
+            items[existing_index] = Item
+
+        self._save(data)
+        return {}
+
+    def get_item(self, Key):
+        data = self._load()
+        item = next((item for item in data[self.collection] if self._matches_key(item, Key)), None)
+        return {"Item": item} if item else {}
+
+    def scan(self, FilterExpression=None, ExpressionAttributeValues=None):
+        data = self._load()
+        items = list(data[self.collection])
+
+        if ExpressionAttributeValues and ":uid" in ExpressionAttributeValues:
+            user_id = ExpressionAttributeValues[":uid"]
+            items = [item for item in items if item.get("user_id") == user_id]
+
+        return {"Items": items}
+
+    def delete_item(self, Key):
+        data = self._load()
+        data[self.collection] = [
+            item for item in data[self.collection]
+            if not self._matches_key(item, Key)
+        ]
+        self._save(data)
+        return {}
+
+
+if LOCAL_MOCK:
+    table = JsonTable(MOCK_DATA_FILE, "workouts", "id")
+    profile_table = JsonTable(MOCK_DATA_FILE, "profiles", "user_id")
+    planned_workouts_table = JsonTable(MOCK_DATA_FILE, "planned_workouts", "id")
+else:
+    import boto3
+
+    # DynamoDB setup
+    dynamodb = boto3.resource('dynamodb', region_name='us-east-1')
+    table = dynamodb.Table('Workouts')
+    profile_table = dynamodb.Table('UserProfiles')
+    planned_workouts_table = dynamodb.Table('PlannedWorkouts')
+
+ALLOWED_WORKOUT_TYPES = {
+    "running", "cycling", "swimming", "strength", "yoga", "hiit",
+    "cardio", "walking", "basketball", "soccer", "tennis", "volleyball",
+    "dancing", "rowing", "climbing", "boxing", "pilates", "other"
+}
+
+ALLOWED_SEX_VALUES = {"male", "female", "other", "prefer_not_to_say"}
+ALLOWED_WEEKLY_TARGET_TYPES = {"workouts", "duration"}
+ALLOWED_ACTIVITY_LEVELS = {"sedentary", "lightly_active", "moderately_active", "very_active", "extra_active"}
+ALLOWED_GYM_EXPERIENCE = {"beginner", "intermediate", "advanced"}
 
 class Workout(BaseModel):
     id: str | None = None
     user_id: str | None = None
-    type: str
-    duration: int
-    calories: int
+    type: str = Field(min_length=1, max_length=50)
+    duration: int = Field(ge=1, le=600)
+    calories: int = Field(ge=0, le=5000)
     timestamp: str | None = None
 
+    @field_validator('type')
+    @classmethod
+    def validate_workout_type(cls, v: str) -> str:
+        cleaned = v.strip().lower()
+        if cleaned not in ALLOWED_WORKOUT_TYPES:
+            raise ValueError('Invalid workout type')
+        return cleaned
+
 class Profile(BaseModel):
-    user_id: str = "default"  # Default user ID for now
-    height_feet: int | None = None
-    height_inches: int | None = None
-    current_weight: int | None = None
-    age: int | None = None
+    user_id: str = "default"
+    height_feet: int | None = Field(default=None, ge=1, le=8)
+    height_inches: int | None = Field(default=None, ge=0, le=11)
+    current_weight: int | None = Field(default=None, ge=50, le=1000)
+    age: int | None = Field(default=None, ge=13, le=120)
     sex: str | None = None
-    goals: str | None = None
-    target_weight: int | None = None
+    goals: str | None = Field(default=None, max_length=500)
+    target_weight: int | None = Field(default=None, ge=50, le=1000)
     weekly_target_type: str | None = None
-    weekly_target_value: int | None = None
+    weekly_target_value: int | None = Field(default=None, ge=1, le=100)
     goal_deadline: str | None = None
-    workout_frequency: int | None = None  # Times per week currently working out
-    activity_level: str | None = None  # Daily activity level
-    gym_experience: str | None = None  # Experience level in gym
+    workout_frequency: int | None = Field(default=None, ge=0, le=7)
+    activity_level: str | None = None
+    gym_experience: str | None = None
+
+    @field_validator('sex')
+    @classmethod
+    def validate_sex(cls, v: str | None) -> str | None:
+        if v is not None and v not in ALLOWED_SEX_VALUES:
+            raise ValueError('Invalid sex value')
+        return v
+
+    @field_validator('weekly_target_type')
+    @classmethod
+    def validate_weekly_target_type(cls, v: str | None) -> str | None:
+        if v is not None and v not in ALLOWED_WEEKLY_TARGET_TYPES:
+            raise ValueError('Invalid weekly target type')
+        return v
+
+    @field_validator('activity_level')
+    @classmethod
+    def validate_activity_level(cls, v: str | None) -> str | None:
+        if v is not None and v not in ALLOWED_ACTIVITY_LEVELS:
+            raise ValueError('Invalid activity level')
+        return v
+
+    @field_validator('gym_experience')
+    @classmethod
+    def validate_gym_experience(cls, v: str | None) -> str | None:
+        if v is not None and v not in ALLOWED_GYM_EXPERIENCE:
+            raise ValueError('Invalid gym experience level')
+        return v
+
+    @field_validator('goal_deadline')
+    @classmethod
+    def validate_goal_deadline(cls, v: str | None) -> str | None:
+        if v is not None and not re.match(r'^\d{4}-\d{2}-\d{2}$', v):
+            raise ValueError('goal_deadline must be in YYYY-MM-DD format')
+        return v
 
 class PlannedWorkout(BaseModel):
     id: str | None = None
     user_id: str = "default"
-    workout_type: str
+    workout_type: str = Field(min_length=1, max_length=50)
     planned_date: str  # YYYY-MM-DD format
     planned_time: str | None = None  # HH:MM format (24-hour)
-    planned_duration: int
-    notes: str | None = None
+    planned_duration: int = Field(ge=1, le=600)
+    notes: str | None = Field(default=None, max_length=1000)
     created_at: str | None = None
     completed: bool = False
     completed_workout_id: str | None = None
+
+    @field_validator('workout_type')
+    @classmethod
+    def validate_planned_workout_type(cls, v: str) -> str:
+        cleaned = v.strip().lower()
+        if cleaned not in ALLOWED_WORKOUT_TYPES:
+            raise ValueError('Invalid workout type')
+        return cleaned
+
+    @field_validator('planned_date')
+    @classmethod
+    def validate_planned_date(cls, v: str) -> str:
+        if not re.match(r'^\d{4}-\d{2}-\d{2}$', v):
+            raise ValueError('planned_date must be in YYYY-MM-DD format')
+        return v
+
+    @field_validator('planned_time')
+    @classmethod
+    def validate_planned_time(cls, v: str | None) -> str | None:
+        if v is not None and not re.match(r'^\d{2}:\d{2}$', v):
+            raise ValueError('planned_time must be in HH:MM format')
+        return v
 
 # Insights response models
 class WeeklyProgress(BaseModel):
