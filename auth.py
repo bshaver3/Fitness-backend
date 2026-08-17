@@ -1,74 +1,82 @@
-import httpx
-from jose import jwt, JWTError
-from fastapi import HTTPException, Depends
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from cachetools import TTLCache
 import os
 
-# Configuration from environment variables
-COGNITO_REGION = os.environ.get("COGNITO_REGION", "us-east-1")
-COGNITO_USER_POOL_ID = os.environ.get("COGNITO_USER_POOL_ID")
-COGNITO_APP_CLIENT_ID = os.environ.get("COGNITO_APP_CLIENT_ID")
+from fastapi import Depends, HTTPException
 
-# JWKS URL for your Cognito User Pool
-COGNITO_JWKS_URL = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}/.well-known/jwks.json"
-COGNITO_ISSUER = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}"
+TRUE_VALUES = {"1", "true", "yes", "on"}
+LOCAL_MOCK = os.environ.get("LOCAL_MOCK", "").strip().lower() in TRUE_VALUES
+MOCK_USER_ID = os.environ.get("MOCK_USER_ID", "local-dev-user")
 
-# Cache JWKS for 1 hour (3600 seconds)
-jwks_cache = TTLCache(maxsize=1, ttl=3600)
+if LOCAL_MOCK:
+    def verify_token() -> dict:
+        return {"sub": MOCK_USER_ID}
+else:
+    import httpx
+    from cachetools import TTLCache
+    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+    from jose import jwt, JWTError
 
-security = HTTPBearer()
+    # Configuration from environment variables
+    COGNITO_REGION = os.environ.get("COGNITO_REGION", "us-east-1")
+    COGNITO_USER_POOL_ID = os.environ.get("COGNITO_USER_POOL_ID")
+    COGNITO_APP_CLIENT_ID = os.environ.get("COGNITO_APP_CLIENT_ID")
 
+    # JWKS URL for your Cognito User Pool
+    COGNITO_JWKS_URL = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}/.well-known/jwks.json"
+    COGNITO_ISSUER = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}"
 
-def get_jwks():
-    """Fetch and cache JWKS from Cognito"""
-    if "jwks" not in jwks_cache:
-        response = httpx.get(COGNITO_JWKS_URL)
-        response.raise_for_status()
-        jwks_cache["jwks"] = response.json()
-    return jwks_cache["jwks"]
+    # Cache JWKS for 1 hour (3600 seconds)
+    jwks_cache = TTLCache(maxsize=1, ttl=3600)
 
+    security = HTTPBearer()
 
-def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
-    """
-    Verify the JWT token from Cognito and return the decoded payload.
-    The 'sub' claim contains the unique user ID.
-    """
-    token = credentials.credentials
+    def get_jwks():
+        """Fetch and cache JWKS from Cognito"""
+        if "jwks" not in jwks_cache:
+            response = httpx.get(COGNITO_JWKS_URL)
+            response.raise_for_status()
+            jwks_cache["jwks"] = response.json()
+        return jwks_cache["jwks"]
 
-    try:
-        # Get JWKS
-        jwks = get_jwks()
+    def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+        """
+        Verify the JWT token from Cognito and return the decoded payload.
+        The 'sub' claim contains the unique user ID.
+        """
+        token = credentials.credentials
 
-        # Decode header to get the key ID
-        unverified_header = jwt.get_unverified_header(token)
-        kid = unverified_header.get("kid")
+        try:
+            # Get JWKS
+            jwks = get_jwks()
 
-        # Find the matching key
-        rsa_key = None
-        for key in jwks.get("keys", []):
-            if key.get("kid") == kid:
-                rsa_key = key
-                break
+            # Decode header to get the key ID
+            unverified_header = jwt.get_unverified_header(token)
+            kid = unverified_header.get("kid")
 
-        if not rsa_key:
-            raise HTTPException(status_code=401, detail="Invalid token: Key not found")
+            # Find the matching key
+            rsa_key = None
+            for key in jwks.get("keys", []):
+                if key.get("kid") == kid:
+                    rsa_key = key
+                    break
 
-        # Verify and decode the token
-        payload = jwt.decode(
-            token,
-            rsa_key,
-            algorithms=["RS256"],
-            audience=COGNITO_APP_CLIENT_ID,
-            issuer=COGNITO_ISSUER
-        )
+            if not rsa_key:
+                raise HTTPException(status_code=401, detail="Invalid token: Key not found")
 
-        return payload
+            # Verify and decode the token
+            payload = jwt.decode(
+                token,
+                rsa_key,
+                algorithms=["RS256"],
+                audience=COGNITO_APP_CLIENT_ID,
+                issuer=COGNITO_ISSUER
+            )
 
-    except JWTError as e:
-        raise HTTPException(status_code=401, detail=f"Invalid token: {str(e)}")
-    except Exception as e:
-        raise HTTPException(status_code=401, detail=f"Authentication failed: {str(e)}")
+            return payload
+
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        except Exception:
+            raise HTTPException(status_code=401, detail="Authentication failed")
 
 
 def get_current_user_id(payload: dict = Depends(verify_token)) -> str:

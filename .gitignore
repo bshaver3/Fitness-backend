@@ -3,3 +3,10 @@
 .elasticbeanstalk/*
 !.elasticbeanstalk/*.cfg.yml
 !.elasticbeanstalk/*.global.yml
+
+# Local development
+.env.local
+.venv/
+__pycache__/
+*.py[cod]
+mock-data*.json
