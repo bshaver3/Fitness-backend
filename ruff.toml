@@ -1,0 +1,5 @@
+target-version = "py311"  # matches the Elastic Beanstalk platform
+
+[lint]
+# FastAPI's `Depends(...)` default-argument pattern is intentional.
+ignore = ["B008"]
