@@ -7,13 +7,14 @@ LOCAL_MOCK = os.environ.get("LOCAL_MOCK", "").strip().lower() in TRUE_VALUES
 MOCK_USER_ID = os.environ.get("MOCK_USER_ID", "local-dev-user")
 
 if LOCAL_MOCK:
+
     def verify_token() -> dict:
         return {"sub": MOCK_USER_ID}
 else:
     import httpx
     from cachetools import TTLCache
-    from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-    from jose import jwt, JWTError
+    from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+    from jose import JWTError, jwt
 
     # Configuration from environment variables
     COGNITO_REGION = os.environ.get("COGNITO_REGION", "us-east-1")
@@ -22,7 +23,9 @@ else:
 
     # JWKS URL for your Cognito User Pool
     COGNITO_JWKS_URL = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}/.well-known/jwks.json"
-    COGNITO_ISSUER = f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}"
+    COGNITO_ISSUER = (
+        f"https://cognito-idp.{COGNITO_REGION}.amazonaws.com/{COGNITO_USER_POOL_ID}"
+    )
 
     # Cache JWKS for 1 hour (3600 seconds)
     jwks_cache = TTLCache(maxsize=1, ttl=3600)
@@ -37,7 +40,9 @@ else:
             jwks_cache["jwks"] = response.json()
         return jwks_cache["jwks"]
 
-    def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)) -> dict:
+    def verify_token(
+        credentials: HTTPAuthorizationCredentials = Depends(security),
+    ) -> dict:
         """
         Verify the JWT token from Cognito and return the decoded payload.
         The 'sub' claim contains the unique user ID.
@@ -60,7 +65,9 @@ else:
                     break
 
             if not rsa_key:
-                raise HTTPException(status_code=401, detail="Invalid token: Key not found")
+                raise HTTPException(
+                    status_code=401, detail="Invalid token: Key not found"
+                )
 
             # Verify and decode the token
             payload = jwt.decode(
@@ -68,7 +75,7 @@ else:
                 rsa_key,
                 algorithms=["RS256"],
                 audience=COGNITO_APP_CLIENT_ID,
-                issuer=COGNITO_ISSUER
+                issuer=COGNITO_ISSUER,
             )
 
             return payload
