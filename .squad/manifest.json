@@ -1,0 +1,28 @@
+{
+  "name": "fittrack-backend",
+  "version": "1.0.0",
+  "description": "FitTrack API: workouts, food intake, profiles, insights and the recommendation engine",
+  "capabilities": [
+    "fastapi",
+    "python",
+    "dynamodb",
+    "cognito-auth",
+    "rest-api",
+    "recommendation-engine",
+    "nutrition-targets",
+    "pytest",
+    "elastic-beanstalk",
+    "api-gateway"
+  ],
+  "contact": {
+    "repo": "bshaver3/Fitness-backend",
+    "labels": [
+      "squad"
+    ]
+  },
+  "accepts": [
+    "issues",
+    "prs"
+  ],
+  "skills": []
+}
