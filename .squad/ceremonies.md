@@ -85,7 +85,7 @@ Production data: 0% completion across 6 retros using markdown checklists, 100% a
 **Agenda:**
 1. State the endpoint, request and response shape
 2. Check it against `openapi.json` in the backend repo
-3. If the contract must change, follow the `fe-be-contract` skill before any build work
+3. If the contract must change, follow the `fe-be-contract` skill. Leads decide the shape; do not ask the owner and do not wait for a merge
 4. Record the cross-squad issue link
 
 ---

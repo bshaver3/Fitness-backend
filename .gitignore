@@ -24,3 +24,6 @@ mock-data*.json
 .squad/upstream.json
 .squad/squad-registry.json
 *.local-backup
+# Squad: watcher runtime state (local to this machine)
+.squad/ralph-circuit-breaker.json
+.squad/ralph-stop

@@ -17,8 +17,16 @@ that folder exists. The rules below apply even when it does not (CI, cloud agent
   by default; breaking changes need sign-off from both Leads.
 - **Recommendation safety:** guidance, not medical advice; every formula has a verified source;
   conservative, attainable targets; rule-based before any ML or LLM.
-- **Human gates:** the owner merges every PR; agents never run mutating AWS commands; user data
-  is private per user.
+- **Autonomous flow:** the owner gives a task once. Never ask the owner to approve a contract,
+  design, plan or triage; Leads decide. The contract goes in the feature PR, not a separate PR,
+  and the frontend builds against the backend feature branch without waiting for a merge.
+  Watchers (`../bin/fittrack start`) pick up delegated issues, so squads trigger each other.
+- **Issue state:** `status:blocked` = waiting on the other squad (comment names the issue; the
+  squad that finishes that work removes the label). `status:on-hold` = PR open and reviewed,
+  waiting for owner merge. Issues stay open until the PR merges through `Closes #N`. Do not
+  close issues by hand or assign them to people.
+- **Human gates:** the owner merges the finished PRs once per feature, and that is the only
+  planned owner step; agents never run mutating AWS commands; user data is private per user.
 - **Milestones:** M1 foundation, M2 food and calorie intake, M3 targets, M4 suggestions, M5 launch.
 
 ## Governance
