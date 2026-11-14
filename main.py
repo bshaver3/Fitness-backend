@@ -91,6 +91,7 @@ class JsonTable:
             "workouts": [],
             "profiles": [],
             "planned_workouts": [],
+            "food_entries": [],
         }
 
     def _load(self):
@@ -160,6 +161,7 @@ if LOCAL_MOCK:
     table = JsonTable(MOCK_DATA_FILE, "workouts", "id")
     profile_table = JsonTable(MOCK_DATA_FILE, "profiles", "user_id")
     planned_workouts_table = JsonTable(MOCK_DATA_FILE, "planned_workouts", "id")
+    food_entries_table = JsonTable(MOCK_DATA_FILE, "food_entries", "id")
 else:
     import boto3
 
@@ -200,6 +202,7 @@ ALLOWED_ACTIVITY_LEVELS = {
     "extra_active",
 }
 ALLOWED_GYM_EXPERIENCE = {"beginner", "intermediate", "advanced"}
+ALLOWED_MEAL_TYPES = {"breakfast", "lunch", "dinner", "snack", "drink", "other"}
 
 
 class Workout(BaseModel):
@@ -234,6 +237,7 @@ class Profile(BaseModel):
     workout_frequency: int | None = Field(default=None, ge=0, le=7)
     activity_level: str | None = None
     gym_experience: str | None = None
+    daily_calorie_target: int | None = Field(default=None, ge=1, le=10000)
 
     @field_validator("sex")
     @classmethod
@@ -269,6 +273,53 @@ class Profile(BaseModel):
         if v is not None and not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
             raise ValueError("goal_deadline must be in YYYY-MM-DD format")
         return v
+
+
+class FoodEntry(BaseModel):
+    id: str | None = None
+    user_id: str | None = None
+    name: str = Field(min_length=1, max_length=200)
+    calories: int = Field(gt=0, le=10000)
+    meal_type: str | None = None
+    date: str = Field(..., min_length=10, max_length=10)
+    timestamp: str | None = None
+    created_at: str | None = None
+    updated_at: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        cleaned = v.strip()
+        if not cleaned:
+            raise ValueError("Food name is required")
+        return cleaned
+
+    @field_validator("meal_type")
+    @classmethod
+    def validate_meal_type(cls, v: str | None) -> str | None:
+        if v is not None:
+            cleaned = v.strip().lower()
+            if cleaned not in ALLOWED_MEAL_TYPES:
+                raise ValueError("Invalid meal type")
+            return cleaned
+        return v
+
+    @field_validator("date")
+    @classmethod
+    def validate_date(cls, v: str) -> str:
+        if not re.match(r"^\d{4}-\d{2}-\d{2}$", v):
+            raise ValueError("date must be in YYYY-MM-DD format")
+        return v
+
+
+class DailyFoodSummary(BaseModel):
+    date: str
+    entries: list[FoodEntry]
+    total_calories: int
+    target_calories: int | None
+    remaining_calories: int | None = None
+    over_target_calories: int | None = None
+    status: str
 
 
 class PlannedWorkout(BaseModel):
@@ -619,6 +670,56 @@ def calculate_consistency_stats(workouts: list) -> ConsistencyStats:
     )
 
 
+def get_daily_food_summary(user_id: str, selected_date: str) -> DailyFoodSummary:
+    response = food_entries_table.scan(
+        FilterExpression="user_id = :uid", ExpressionAttributeValues={":uid": user_id}
+    )
+    entries = [FoodEntry(**entry) for entry in response.get("Items", [])]
+    entries = [entry for entry in entries if entry.date == selected_date]
+    entries.sort(key=lambda x: (x.date, x.timestamp or ""))
+
+    profile_response = profile_table.get_item(Key={"user_id": user_id})
+    profile = profile_response.get("Item", {})
+    target_calories = profile.get("daily_calorie_target")
+    total_calories = sum(entry.calories for entry in entries)
+
+    if target_calories is None:
+        return DailyFoodSummary(
+            date=selected_date,
+            entries=entries,
+            total_calories=total_calories,
+            target_calories=None,
+            status="no_target",
+        )
+
+    if total_calories < target_calories:
+        return DailyFoodSummary(
+            date=selected_date,
+            entries=entries,
+            total_calories=total_calories,
+            target_calories=target_calories,
+            remaining_calories=target_calories - total_calories,
+            status="remaining",
+        )
+    if total_calories > target_calories:
+        return DailyFoodSummary(
+            date=selected_date,
+            entries=entries,
+            total_calories=total_calories,
+            target_calories=target_calories,
+            over_target_calories=total_calories - target_calories,
+            status="over_target",
+        )
+    return DailyFoodSummary(
+        date=selected_date,
+        entries=entries,
+        total_calories=total_calories,
+        target_calories=target_calories,
+        remaining_calories=0,
+        status="on_target",
+    )
+
+
 @app.get("/")
 def read_root():
     return {"message": "Hello from FastAPI!"}
@@ -673,10 +774,10 @@ def get_comprehensive_insights(user_id: str = Depends(get_current_user_id)):
         try:
             ts = w.get("timestamp", "")
             if ts:
-                w["parsed_date"] = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                w["parsed_date"] = datetime.fromisoformat(ts)
             else:
                 w["parsed_date"] = datetime.now(UTC)
-        except:
+        except (TypeError, ValueError):
             w["parsed_date"] = datetime.now(UTC)
     workouts.sort(key=lambda x: x["parsed_date"], reverse=True)
 
@@ -711,6 +812,110 @@ def save_profile(profile: Profile, user_id: str = Depends(get_current_user_id)):
 def get_profile(user_id: str = Depends(get_current_user_id)):
     response = profile_table.get_item(Key={"user_id": user_id})
     return response.get("Item", {})
+
+
+@app.get("/food-target")
+def get_food_target(user_id: str = Depends(get_current_user_id)):
+    response = profile_table.get_item(Key={"user_id": user_id})
+    profile = response.get("Item", {})
+    return {"daily_calorie_target": profile.get("daily_calorie_target")}
+
+
+@app.put("/food-target")
+def set_food_target(
+    payload: dict, user_id: str = Depends(get_current_user_id)
+):
+    target_value = payload.get("daily_calorie_target")
+    if target_value is None or int(target_value) <= 0:
+        raise HTTPException(status_code=400, detail="daily_calorie_target must be > 0")
+
+    response = profile_table.get_item(Key={"user_id": user_id})
+    profile = response.get("Item", {})
+    profile["user_id"] = user_id
+    profile["daily_calorie_target"] = int(target_value)
+    profile_table.put_item(Item=profile)
+    return {"daily_calorie_target": int(target_value)}
+
+
+@app.delete("/food-target")
+def clear_food_target(user_id: str = Depends(get_current_user_id)):
+    response = profile_table.get_item(Key={"user_id": user_id})
+    profile = response.get("Item", {})
+    profile["user_id"] = user_id
+    profile.pop("daily_calorie_target", None)
+    profile_table.put_item(Item=profile)
+    return {"daily_calorie_target": None}
+
+
+@app.post("/food-entries", response_model=FoodEntry)
+def create_food_entry(
+    entry: FoodEntry, user_id: str = Depends(get_current_user_id)
+):
+    if not entry.id:
+        entry.id = str(uuid4())
+    if not entry.date:
+        entry.date = datetime.now(UTC).date().isoformat()
+    if not entry.timestamp:
+        entry.timestamp = datetime.now(UTC).isoformat()
+    if not entry.created_at:
+        entry.created_at = datetime.now(UTC).isoformat()
+    if not entry.updated_at:
+        entry.updated_at = entry.created_at
+    entry.user_id = user_id
+    food_entries_table.put_item(Item=entry.dict())
+    return entry
+
+
+@app.get("/food-entries", response_model=list[FoodEntry])
+def get_food_entries(
+    date: str | None = None, user_id: str = Depends(get_current_user_id)
+):
+    response = food_entries_table.scan(
+        FilterExpression="user_id = :uid", ExpressionAttributeValues={":uid": user_id}
+    )
+    entries = [FoodEntry(**entry) for entry in response.get("Items", [])]
+    if date:
+        entries = [entry for entry in entries if entry.date == date]
+    entries.sort(key=lambda x: (x.date, x.timestamp or ""))
+    return entries
+
+
+@app.get("/food-entries/daily", response_model=DailyFoodSummary)
+def get_daily_food_summary_route(
+    date: str | None = None, user_id: str = Depends(get_current_user_id)
+):
+    selected_date = date or datetime.now(UTC).date().isoformat()
+    return get_daily_food_summary(user_id, selected_date)
+
+
+@app.put("/food-entries/{entry_id}", response_model=FoodEntry)
+def update_food_entry(
+    entry_id: str,
+    entry: FoodEntry,
+    user_id: str = Depends(get_current_user_id),
+):
+    response = food_entries_table.get_item(Key={"id": entry_id})
+    existing = response.get("Item")
+    if not existing or existing.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Food entry not found")
+
+    entry.id = entry_id
+    entry.user_id = user_id
+    entry.updated_at = datetime.now(UTC).isoformat()
+    if not entry.timestamp:
+        entry.timestamp = datetime.now(UTC).isoformat()
+    food_entries_table.put_item(Item=entry.dict())
+    return entry
+
+
+@app.delete("/food-entries/{entry_id}")
+def delete_food_entry(entry_id: str, user_id: str = Depends(get_current_user_id)):
+    response = food_entries_table.get_item(Key={"id": entry_id})
+    item = response.get("Item")
+    if not item or item.get("user_id") != user_id:
+        raise HTTPException(status_code=404, detail="Food entry not found")
+    food_entries_table.delete_item(Key={"id": entry_id})
+    return {"message": f"Food entry {entry_id} deleted."}
 
 
 @app.get("/health")
