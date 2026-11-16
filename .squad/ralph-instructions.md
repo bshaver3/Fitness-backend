@@ -47,21 +47,48 @@
 Read this file for your full instructions.  Follow ALL sections.
 MAXIMIZE PARALLELISM — spawn agents for ALL actionable issues simultaneously.
 
+This session is unattended. The owner is not watching. Never stop to ask the owner a question
+and never wait for an owner approval. Read `.squad/decisions.md` and
+`.squad/skills/fe-be-contract/SKILL.md` first; they define the flow.
+
 ### Issue Selection
 
-Work on every open, unblocked, unassigned issue labeled `squad` or `squad:{member}`.
-Skip issues that are assigned to a human, blocked, or marked `status:on-hold`.
+Work on every open, unassigned issue labeled `squad` or `squad:{member}` that has no
+`status:blocked` and no `status:on-hold` label. An issue that already has a branch or a PR is a
+continuation: check out that branch and finish it. Do not start a second branch.
+
+### Working an Issue
+
+1. Lead triages and names the members. No approval step follows triage.
+2. Work on one branch per issue: `squad/<issue-number>-<slug>`, created from fresh `origin/main`.
+3. API shape involved: follow the `fe-be-contract` skill. Contract commit first, then unblock the
+   other squad, then build.
+4. Run the reviews the charters require (Lead, Tester, Security, Fact Checker, Rai) inside this
+   session. Fix what they reject. Do not ask the owner to arbitrate.
+5. Run the repo's lint and tests before the PR.
+
+### Handoffs to the Other Squad (fittrack-frontend)
+
+- Need work from them: `squad delegate fittrack-frontend "<request + acceptance criteria + link to this issue>"`.
+  Then label this issue `status:blocked` and comment which issue it waits on. Continue any part
+  that does not depend on them before you block.
+- Your work unblocks one of their issues: comment there, then
+  `gh issue edit <n> --repo bshaver3/fitness-tracker --remove-label status:blocked`.
+- Never edit files in `../fitness-tracker`. Reading is fine.
 
 ### Post-Task Actions
 
-<!-- Uncomment and customize to add post-task hooks, e.g. Teams notifications:
-
-After completing work on each issue:
-- Post a brief summary to the team channel via your Teams MCP tool.
-- Update the issue with a progress comment if no PR has been opened yet.
--->
+When the work for an issue is complete:
+- Open one PR against `main` with `Closes #<issue>` in the body and a short test summary.
+- Label the issue `status:on-hold` (`gh issue edit <n> --add-label status:on-hold`). This means
+  "waiting for owner merge" and stops the watcher from re-running it.
+- Do not close the issue. Do not merge the PR. Do not assign the issue to anyone.
+- Do not apply a `squad:cross-squad` label; it is not a team member.
+- Return to `main` (`git checkout main`) so the next watcher round starts clean.
 
 ### Escalation
 
-If you are blocked on an issue, comment on it explaining why, add a `status:blocked`
-label, and move to the next actionable item.  Do not halt the loop.
+If you are blocked by something no agent in either squad can resolve (a missing secret, a
+mutating AWS command, a breaking contract change the two Leads disagree on), comment on the issue
+with the exact question or command for the owner, add `status:blocked`, and move to the next
+actionable item.  Do not halt the loop.
