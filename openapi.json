@@ -369,8 +369,31 @@
             "type": "string"
           },
           "workout_type": {
-            "maxLength": 50,
-            "minLength": 1,
+            "enum": [
+              "running",
+              "jogging",
+              "cycling",
+              "swimming",
+              "weight training",
+              "strength",
+              "yoga",
+              "hiit",
+              "cardio",
+              "walking",
+              "crossfit",
+              "elliptical",
+              "hiking",
+              "basketball",
+              "soccer",
+              "tennis",
+              "volleyball",
+              "dancing",
+              "rowing",
+              "climbing",
+              "boxing",
+              "pilates",
+              "other"
+            ],
             "title": "Workout Type",
             "type": "string"
           }
@@ -753,8 +776,31 @@
             "title": "Timestamp"
           },
           "type": {
-            "maxLength": 50,
-            "minLength": 1,
+            "enum": [
+              "running",
+              "jogging",
+              "cycling",
+              "swimming",
+              "weight training",
+              "strength",
+              "yoga",
+              "hiit",
+              "cardio",
+              "walking",
+              "crossfit",
+              "elliptical",
+              "hiking",
+              "basketball",
+              "soccer",
+              "tennis",
+              "volleyball",
+              "dancing",
+              "rowing",
+              "climbing",
+              "boxing",
+              "pilates",
+              "other"
+            ],
             "title": "Type",
             "type": "string"
           },
