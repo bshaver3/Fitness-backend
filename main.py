@@ -174,13 +174,18 @@ else:
 
 ALLOWED_WORKOUT_TYPES = {
     "running",
+    "jogging",
     "cycling",
     "swimming",
+    "weight training",
     "strength",
     "yoga",
     "hiit",
     "cardio",
     "walking",
+    "crossfit",
+    "elliptical",
+    "hiking",
     "basketball",
     "soccer",
     "tennis",
@@ -208,12 +213,36 @@ ALLOWED_MEAL_TYPES = {"breakfast", "lunch", "dinner", "snack", "drink", "other"}
 class Workout(BaseModel):
     id: str | None = None
     user_id: str | None = None
-    type: str = Field(min_length=1, max_length=50)
+    type: Literal[
+        "running",
+        "jogging",
+        "cycling",
+        "swimming",
+        "weight training",
+        "strength",
+        "yoga",
+        "hiit",
+        "cardio",
+        "walking",
+        "crossfit",
+        "elliptical",
+        "hiking",
+        "basketball",
+        "soccer",
+        "tennis",
+        "volleyball",
+        "dancing",
+        "rowing",
+        "climbing",
+        "boxing",
+        "pilates",
+        "other",
+    ]
     duration: int = Field(ge=1, le=600)
     calories: int = Field(ge=0, le=5000)
     timestamp: str | None = None
 
-    @field_validator("type")
+    @field_validator("type", mode="before")
     @classmethod
     def validate_workout_type(cls, v: str) -> str:
         cleaned = v.strip().lower()
@@ -320,7 +349,31 @@ class DailyFoodSummary(BaseModel):
 class PlannedWorkout(BaseModel):
     id: str | None = None
     user_id: str = "default"
-    workout_type: str = Field(min_length=1, max_length=50)
+    workout_type: Literal[
+        "running",
+        "jogging",
+        "cycling",
+        "swimming",
+        "weight training",
+        "strength",
+        "yoga",
+        "hiit",
+        "cardio",
+        "walking",
+        "crossfit",
+        "elliptical",
+        "hiking",
+        "basketball",
+        "soccer",
+        "tennis",
+        "volleyball",
+        "dancing",
+        "rowing",
+        "climbing",
+        "boxing",
+        "pilates",
+        "other",
+    ]
     planned_date: str  # YYYY-MM-DD format
     planned_time: str | None = None  # HH:MM format (24-hour)
     planned_duration: int = Field(ge=1, le=600)
@@ -329,7 +382,7 @@ class PlannedWorkout(BaseModel):
     completed: bool = False
     completed_workout_id: str | None = None
 
-    @field_validator("workout_type")
+    @field_validator("workout_type", mode="before")
     @classmethod
     def validate_planned_workout_type(cls, v: str) -> str:
         cleaned = v.strip().lower()
