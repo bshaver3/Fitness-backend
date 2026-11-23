@@ -33,6 +33,11 @@ permissions:
 
 jobs:
   heartbeat:
+    # FitTrack: keyword triage is off. It scores one phrase per routing row and
+    # sends every tie to Lead. The watcher's Lead agent reads the issue and sets
+    # the squad:<member> label instead (.squad/ralph-instructions.md).
+    # Manual runs still work.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 #v4
