@@ -244,7 +244,9 @@ class Workout(BaseModel):
 
     @field_validator("type", mode="before")
     @classmethod
-    def validate_workout_type(cls, v: str) -> str:
+    def validate_workout_type(cls, v: object) -> object:
+        if not isinstance(v, str):
+            return v
         cleaned = v.strip().lower()
         if cleaned not in ALLOWED_WORKOUT_TYPES:
             raise ValueError("Invalid workout type")
@@ -384,7 +386,9 @@ class PlannedWorkout(BaseModel):
 
     @field_validator("workout_type", mode="before")
     @classmethod
-    def validate_planned_workout_type(cls, v: str) -> str:
+    def validate_planned_workout_type(cls, v: object) -> object:
+        if not isinstance(v, str):
+            return v
         cleaned = v.strip().lower()
         if cleaned not in ALLOWED_WORKOUT_TYPES:
             raise ValueError("Invalid workout type")
@@ -870,9 +874,7 @@ def get_food_target(user_id: str = Depends(get_current_user_id)):
 
 
 @app.put("/food-target")
-def set_food_target(
-    payload: dict, user_id: str = Depends(get_current_user_id)
-):
+def set_food_target(payload: dict, user_id: str = Depends(get_current_user_id)):
     target_value = payload.get("daily_calorie_target")
     if target_value is None or int(target_value) <= 0:
         raise HTTPException(status_code=400, detail="daily_calorie_target must be > 0")
@@ -896,9 +898,7 @@ def clear_food_target(user_id: str = Depends(get_current_user_id)):
 
 
 @app.post("/food-entries", response_model=FoodEntry)
-def create_food_entry(
-    entry: FoodEntry, user_id: str = Depends(get_current_user_id)
-):
+def create_food_entry(entry: FoodEntry, user_id: str = Depends(get_current_user_id)):
     if not entry.id:
         entry.id = str(uuid4())
     if not entry.date:

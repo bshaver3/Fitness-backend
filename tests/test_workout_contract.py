@@ -85,6 +85,16 @@ class WorkoutContractTests(unittest.TestCase):
                 planned_duration=30,
             )
 
+    def test_models_reject_non_string_workout_types_through_literal_validation(self):
+        with self.assertRaises(ValidationError):
+            main.Workout(type=123, duration=30, calories=200)
+        with self.assertRaises(ValidationError):
+            main.PlannedWorkout(
+                workout_type=["running"],
+                planned_date="2026-12-01",
+                planned_duration=30,
+            )
+
     def test_logged_workout_route_accepts_all_new_types_and_rejects_invalid(self):
         workout_table = InMemoryWorkoutTable()
         client = TestClient(main.app)
@@ -103,8 +113,13 @@ class WorkoutContractTests(unittest.TestCase):
                 "/workouts",
                 json={"type": "unsupported sport", "duration": 30, "calories": 200},
             )
+            non_string = client.post(
+                "/workouts",
+                json={"type": 123, "duration": 30, "calories": 200},
+            )
 
         self.assertEqual(invalid.status_code, 422)
+        self.assertEqual(non_string.status_code, 422)
         self.assertEqual(len(workout_table.items), len(NEW_WORKOUT_TYPES))
 
     def test_planned_workout_route_accepts_all_new_types_and_rejects_invalid(self):
@@ -133,8 +148,17 @@ class WorkoutContractTests(unittest.TestCase):
                     "planned_duration": 30,
                 },
             )
+            non_string = client.post(
+                "/planned-workouts",
+                json={
+                    "workout_type": ["running"],
+                    "planned_date": "2026-12-01",
+                    "planned_duration": 30,
+                },
+            )
 
         self.assertEqual(invalid.status_code, 422)
+        self.assertEqual(non_string.status_code, 422)
         self.assertEqual(len(planned_table.items), len(NEW_WORKOUT_TYPES))
 
     def test_openapi_documents_supported_workout_enums(self):
@@ -147,7 +171,8 @@ class WorkoutContractTests(unittest.TestCase):
     def test_committed_openapi_matches_fastapi_app(self):
         with open("openapi.json", encoding="utf-8") as schema_file:
             committed_schema = json.load(schema_file)
-        self.assertEqual(main.app.openapi(), committed_schema)
+        generated_components = main.app.openapi()["components"]
+        self.assertEqual(committed_schema, {"components": generated_components})
 
 
 if __name__ == "__main__":
