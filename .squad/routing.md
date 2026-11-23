@@ -6,16 +6,20 @@ How to decide who handles what.
 
 | Work Type | Route To | Examples |
 |-----------|----------|----------|
-| Architecture, data model, API contract change | Lead | New DynamoDB table, endpoint shape, splitting `main.py` |
-| Issue triage and cross-squad requests | Lead | `squad` label inbox, `[cross-squad]` issues from frontend |
-| API endpoints, models, persistence | Backend | Food log CRUD, calorie-intake totals, profile fields |
-| Recommendation and target logic | Coach | TDEE and macro targets, workout suggestions, diet plan rules |
-| Tests and quality | Tester | pytest suite, contract tests, bug reproduction |
-| Auth, data access, hardening | Security | `auth.py`, per-user scoping, CORS, rate limits, dependency audit |
-| CI, deploy config, release | DevOps | GitHub Actions, `Procfile`, Elastic Beanstalk runbook |
-| Documentation | Docs | README, API reference, ADRs, changelog |
+| Architecture | Lead | data model, API contract, contract change, breaking change, endpoint shape, module boundaries, new table, `openapi.json` |
+| Endpoints | Backend | validation, validator, allowlist, Pydantic, DynamoDB, CRUD, workout type, food entries, planned workouts, profile fields, request model, `main.py` |
+| Recommendations | Coach | TDEE, BMR, macro targets, workout suggestion, diet plan, recommendation engine |
+| Testing | Tester | pytest, test suite, contract test, regression test, flaky test, coverage |
+| Security | Security | `auth.py`, JWT, Cognito, CORS, rate limit, per-user scoping, secrets, dependency audit, vulnerability |
+| Deployment | DevOps | GitHub Actions, CI pipeline, `Procfile`, Elastic Beanstalk, eb deploy, API Gateway, release |
+| Documentation | Docs | README, API reference, ADR, changelog |
 
 Add or edit rows here only when their agent names also exist in the casting registry.
+
+Squad's issue triage matches these rows by keyword. Keep each Work Type one distinctive word and put
+match phrases in Examples, comma-separated. Do not add phrases that appear in every delegated issue
+(`acceptance criteria`, `scope`, `triage`, `cross-squad`): they make every issue tie or misroute.
+When no row wins, the issue goes to Lead, who names the members.
 
 ## Issue Routing
 
@@ -49,5 +53,6 @@ Add or edit rows here only when their agent names also exist in the casting regi
 | Incoming `[cross-squad]` issue | Lead triages it like any `squad` issue and starts work at once. No owner approval. |
 | Your work unblocks an issue in `bshaver3/fitness-tracker` | Comment there with branch name and summary, then `gh issue edit <n> --repo bshaver3/fitness-tracker --remove-label status:blocked`. |
 | Work finished, PR open and reviewed | PR body has `Closes #N`. Label the issue `status:on-hold`. Do not close it. |
+| Opening an issue for the other squad | Use `squad delegate fittrack-frontend "..."`. If you must use `gh issue create`, the issue needs the `squad` label or no watcher picks it up. Do not add `squad:cross-squad` or any `squad:<member>` label; triage adds the member label. |
 | API contract change | Follow the `fe-be-contract` skill (`.squad/skills/fe-be-contract/SKILL.md`). |
 | Quick question about the other repo | Read `../fitness-tracker` (read-only), or ask through `copilot -C ../fitness-tracker --agent squad -p "<question>"`. |

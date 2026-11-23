@@ -19,6 +19,12 @@ on:
   # Manual trigger
   workflow_dispatch:
 
+# FitTrack: an issue created with several labels fires one run per label.
+# Queue them per issue so only the first run triages and the rest see it done.
+concurrency:
+  group: squad-heartbeat-${{ github.event.issue.number || github.run_id }}
+  cancel-in-progress: false
+
 permissions:
   issues: write
   contents: read

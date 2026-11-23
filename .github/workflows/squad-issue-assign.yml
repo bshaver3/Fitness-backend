@@ -17,7 +17,8 @@ permissions:
 jobs:
   assign-work:
     # Only trigger on squad:{member} labels (not the base "squad" label)
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.label.name, 'squad:')
+    # FitTrack: `squad:cross-squad` marks a delegated issue; it is not a member label.
+    if: github.event_name == 'workflow_dispatch' || (startsWith(github.event.label.name, 'squad:') && github.event.label.name != 'squad:cross-squad')
     runs-on: ubuntu-latest
     steps:
       - name: Require Copilot assignment token
