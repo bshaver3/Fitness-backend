@@ -59,7 +59,10 @@ continuation: check out that branch and finish it. Do not start a second branch.
 
 ### Working an Issue
 
-1. Lead triages and names the members. No approval step follows triage.
+1. Lead triages and names the members. No approval step follows triage. GitHub does not triage
+   by keyword any more, so Lead sets the member label: `gh issue edit <n> --add-label squad:<member>`
+   for the member who owns most of the work (for example `squad:backend`). Keep the `squad` label.
+   If the issue already has a wrong `squad:<member>` label, remove it in the same command.
 2. Work on one branch per issue: `squad/<issue-number>-<slug>`, created from fresh `origin/main`.
 3. API shape involved: follow the `fe-be-contract` skill. Contract commit first, then unblock the
    other squad, then build.

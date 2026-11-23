@@ -16,10 +16,9 @@ How to decide who handles what.
 
 Add or edit rows here only when their agent names also exist in the casting registry.
 
-Squad's issue triage matches these rows by keyword. Keep each Work Type one distinctive word and put
-match phrases in Examples, comma-separated. Do not add phrases that appear in every delegated issue
-(`acceptance criteria`, `scope`, `triage`, `cross-squad`): they make every issue tie or misroute.
-When no row wins, the issue goes to Lead, who names the members.
+Automatic keyword triage on GitHub is turned off (`squad-triage.yml` and `squad-heartbeat.yml` run
+only by hand). It scored one phrase per row and sent every tie to Lead. The Lead agent in the
+watcher session reads the issue, uses this table as guidance, and sets the `squad:{member}` label.
 
 ## Issue Routing
 
