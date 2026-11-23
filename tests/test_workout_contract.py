@@ -171,8 +171,7 @@ class WorkoutContractTests(unittest.TestCase):
     def test_committed_openapi_matches_fastapi_app(self):
         with open("openapi.json", encoding="utf-8") as schema_file:
             committed_schema = json.load(schema_file)
-        generated_components = main.app.openapi()["components"]
-        self.assertEqual(committed_schema, {"components": generated_components})
+        self.assertEqual(committed_schema, main.app.openapi())
 
 
 if __name__ == "__main__":

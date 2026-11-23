@@ -874,7 +874,9 @@ def get_food_target(user_id: str = Depends(get_current_user_id)):
 
 
 @app.put("/food-target")
-def set_food_target(payload: dict, user_id: str = Depends(get_current_user_id)):
+def set_food_target(
+    payload: dict, user_id: str = Depends(get_current_user_id)
+):
     target_value = payload.get("daily_calorie_target")
     if target_value is None or int(target_value) <= 0:
         raise HTTPException(status_code=400, detail="daily_calorie_target must be > 0")
@@ -898,7 +900,9 @@ def clear_food_target(user_id: str = Depends(get_current_user_id)):
 
 
 @app.post("/food-entries", response_model=FoodEntry)
-def create_food_entry(entry: FoodEntry, user_id: str = Depends(get_current_user_id)):
+def create_food_entry(
+    entry: FoodEntry, user_id: str = Depends(get_current_user_id)
+):
     if not entry.id:
         entry.id = str(uuid4())
     if not entry.date:
