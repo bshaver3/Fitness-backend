@@ -6,6 +6,7 @@ from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
+from typing import Literal
 from uuid import uuid4
 
 from fastapi import Depends, FastAPI, HTTPException
@@ -201,7 +202,6 @@ ALLOWED_ACTIVITY_LEVELS = {
     "very_active",
     "extra_active",
 }
-ALLOWED_GYM_EXPERIENCE = {"beginner", "intermediate", "advanced"}
 ALLOWED_MEAL_TYPES = {"breakfast", "lunch", "dinner", "snack", "drink", "other"}
 
 
@@ -236,7 +236,9 @@ class Profile(BaseModel):
     goal_deadline: str | None = None
     workout_frequency: int | None = Field(default=None, ge=0, le=7)
     activity_level: str | None = None
-    gym_experience: str | None = None
+    gym_experience: (
+        Literal["beginner", "novice", "intermediate", "advanced", "expert"] | None
+    ) = None
     daily_calorie_target: int | None = Field(default=None, ge=1, le=10000)
 
     @field_validator("sex")
@@ -258,13 +260,6 @@ class Profile(BaseModel):
     def validate_activity_level(cls, v: str | None) -> str | None:
         if v is not None and v not in ALLOWED_ACTIVITY_LEVELS:
             raise ValueError("Invalid activity level")
-        return v
-
-    @field_validator("gym_experience")
-    @classmethod
-    def validate_gym_experience(cls, v: str | None) -> str | None:
-        if v is not None and v not in ALLOWED_GYM_EXPERIENCE:
-            raise ValueError("Invalid gym experience level")
         return v
 
     @field_validator("goal_deadline")

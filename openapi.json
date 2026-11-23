@@ -461,6 +461,13 @@
           "gym_experience": {
             "anyOf": [
               {
+                "enum": [
+                  "beginner",
+                  "novice",
+                  "intermediate",
+                  "advanced",
+                  "expert"
+                ],
                 "type": "string"
               },
               {
